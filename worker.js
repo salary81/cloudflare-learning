@@ -15,10 +15,8 @@ export default {
         const text = update.message.text.trim();
         const userKey = user_${chatId};
 
-        // خواندن داده ذخیره‌شده از دیتابیس دائمی KV
         let session = await env.BOT_KV.get(userKey, { type: "json" });
 
-        // شروع یا ریست
         if (text === "/start" || text === "/reset") {
           session = { step: "AWAITING_NAME", data: {} };
           await env.BOT_KV.put(userKey, JSON.stringify(session));
@@ -35,7 +33,6 @@ export default {
           return new Response("OK");
         }
 
-        // مراحل دریافت اطلاعات
         switch (session.step) {
           case "AWAITING_NAME":
             session.data.name = text;
