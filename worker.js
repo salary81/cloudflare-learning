@@ -1,6 +1,9 @@
 const BOT_TOKEN = "8661021538:AAE1flLAX3xtMYAPo30hUV67z01c_frIiQc";
 const TELEGRAM_API = https://api.telegram.org/bot${BOT_TOKEN};
 
+// حافظه موقت در ورکر (برای اینکه نیازی به تنظیم KV و دردسرهای کانفیگ نباشد)
+const userSessions = new Map();
+
 export default {
   async fetch(request, env, ctx) {
     if (request.method !== "POST") {
@@ -13,20 +16,18 @@ export default {
       if (update.message && update.message.text) {
         const chatId = update.message.chat.id;
         const text = update.message.text.trim();
-        const userKey = user_${chatId};
-
-        let session = await env.BOT_KV.get(userKey, { type: "json" });
 
         if (text === "/start" || text === "/reset") {
-          session = { step: "AWAITING_NAME", data: {} };
-          await env.BOT_KV.put(userKey, JSON.stringify(session));
+          userSessions.set(chatId, { step: "AWAITING_NAME", data: {} });
 
           await sendMessage(
             chatId,
-            "سلام! خوش آمدید. 👋\nاطلاعات شما به صورت دائمی ذخیره می‌شود.\n\nلطفاً نام و نام‌خانوادگی خود را بفرستید:"
+            "سلام! خوش آمدید. 👋\n\nلطفاً نام و نام‌خانوادگی خود را بفرستید:"
           );
           return new Response("OK");
         }
+
+        const session = userSessions.get(chatId);
 
         if (!session) {
           await sendMessage(chatId, "لطفاً ابتدا دستور /start را بفرستید.");
@@ -37,7 +38,7 @@ export default {
           case "AWAITING_NAME":
             session.data.name = text;
             session.step = "AWAITING_FIELD";
-            await env.BOT_KV.put(userKey, JSON.stringify(session));
+            userSessions.set(chatId, session);
 
             await sendMessage(chatId, نام شما ثبت شد ✨\nحالا **رشته یا تخصص** خود را ارسال کنید:);
             break;
@@ -46,10 +47,10 @@ export default {
             session.data.field = text;
             session.data.savedAt = new Date().toISOString();
             session.step = "COMPLETED";
-            await env.BOT_KV.put(userKey, JSON.stringify(session));
+            userSessions.set(chatId, session);
 
             const summary =
-              ✅ **اطلاعات در دیتابیس دائمی ذخیره شد!**\n\n +
+              ✅ **اطلاعات ذخیره شد!**\n\n +
               👤 نام: ${session.data.name}\n +
               📚 رشته: ${session.data.field}\n +
               🆔 شناسه: \${chatId}\\n\n +
@@ -61,7 +62,7 @@ export default {
           case "COMPLETED":
             await sendMessage(
               chatId,
-              اطلاعات شما از قبل در دیتابیس ثبت شده است:\n +
+              اطلاعات شما از قبل ثبت شده است:\n +
               👤 نام: ${session.data.name}\n +
               📚 رشته: ${session.data.field}\n\n +
               برای تغییر اطلاعات، دستور /reset را ارسال کنید.
