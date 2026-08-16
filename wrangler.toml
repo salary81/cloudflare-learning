@@ -1,3 +1,7 @@
-name = "telegram-bot-project"
-main = "worker.js"
+name = "cloudflare-learning"
+main = "index.js"
 compatibility_date = "2024-01-01"
+
+[[kv_namespaces]]
+binding = "BOT_KV"
+id = "b7ceee22f8334e8d83b7eef697bb4245"
