@@ -1,15 +1,11 @@
+const BOT_TOKEN = "8661021538:AAE1flLAX3xtMYAPo30hUV67z01c_frIiQc";
+const TELEGRAM_API = https://api.telegram.org/bot${BOT_TOKEN};
+
 export default {
   async fetch(request, env, ctx) {
     if (request.method !== "POST") {
-      return new Response("Telegram Bot is active!", { status: 200 });
+      return new Response("Bot is running", { status: 200 });
     }
-
-    const startTime = performance.now();
-    const serverReceiveTimeMs = Date.now();
-
-    // خواندن توکن از متغیرهای محیطی یا مقدار پیش‌فرض
-    const token = env.BOT_TOKEN || "8661021538:AAE1flLAX3xtMYAPo30hUV67z01c_frIiQc";
-    const telegramApi = `https://api.telegram.org/bot${token}`;
 
     try {
       const update = await request.json();
@@ -17,36 +13,81 @@ export default {
       if (update.message && update.message.text) {
         const chatId = update.message.chat.id;
         const text = update.message.text.trim();
-        const msgDateUnix = update.message.date;
+        const userKey = user_${chatId};
 
-        if (text.startsWith("/start")) {
-          // محاسبه زمان تأخیر از سمت سرورهای تلگرام تا کلادفلار
-          const delaySeconds = Math.max(0, Math.floor(serverReceiveTimeMs / 1000) - msgDateUnix);
+        // خواندن داده ذخیره‌شده از دیتابیس دائمی KV
+        let session = await env.BOT_KV.get(userKey, { type: "json" });
 
-          // محاسبه زمان پردازش ورکر
-          const processingTimeMs = (performance.now() - startTime).toFixed(2);
+        // شروع یا ریست
+        if (text === "/start" || text === "/reset") {
+          session = { step: "AWAITING_NAME", data: {} };
+          await env.BOT_KV.put(userKey, JSON.stringify(session));
 
-          const replyText = 
-            `سلام!\n\n` +
-            `⏱ تاخیر ارسال پیام: ${delaySeconds} ثانیه\n` +
-            `⚡ زمان پاسخگویی ورکر: ${processingTimeMs} میلی‌ثانیه\n` +
-            `🚀 معماری: Cloudflare Serverless + GitHub CI/CD\n` +
-            `🛡 وضعیت ریت‌لیمیت: فعال و مجاز`;
+          await sendMessage(
+            chatId,
+            "سلام! خوش آمدید. 👋\nاطلاعات شما به صورت دائمی ذخیره می‌شود.\n\nلطفاً نام و نام‌خانوادگی خود را بفرستید:"
+          );
+          return new Response("OK");
+        }
 
-          await fetch(`${telegramApi}/sendMessage`, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              chat_id: chatId,
-              text: replyText,
-            }),
-          });
+        if (!session) {
+          await sendMessage(chatId, "لطفاً ابتدا دستور /start را بفرستید.");
+          return new Response("OK");
+        }
+
+        // مراحل دریافت اطلاعات
+        switch (session.step) {
+          case "AWAITING_NAME":
+            session.data.name = text;
+            session.step = "AWAITING_FIELD";
+            await env.BOT_KV.put(userKey, JSON.stringify(session));
+
+            await sendMessage(chatId, نام شما ثبت شد ✨\nحالا **رشته یا تخصص** خود را ارسال کنید:);
+            break;
+
+          case "AWAITING_FIELD":
+            session.data.field = text;
+            session.data.savedAt = new Date().toISOString();
+            session.step = "COMPLETED";
+            await env.BOT_KV.put(userKey, JSON.stringify(session));
+
+            const summary =
+              ✅ **اطلاعات در دیتابیس دائمی ذخیره شد!**\n\n +
+              👤 نام: ${session.data.name}\n +
+              📚 رشته: ${session.data.field}\n +
+              🆔 شناسه: \${chatId}\\n\n +
+              برای ویرایش مجدد /reset را بزنید.;
+
+            await sendMessage(chatId, summary);
+            break;
+
+          case "COMPLETED":
+            await sendMessage(
+              chatId,
+              اطلاعات شما از قبل در دیتابیس ثبت شده است:\n +
+              👤 نام: ${session.data.name}\n +
+              📚 رشته: ${session.data.field}\n\n +
+              برای تغییر اطلاعات، دستور /reset را ارسال کنید.
+            );
+            break;
         }
       }
     } catch (err) {
-      console.error("Error processing webhook:", err);
+      console.error("Worker Error:", err);
     }
 
-    return new Response("OK", { status: 200 });
+    return new Response("OK");
   },
 };
+
+async function sendMessage(chatId, text) {
+  await fetch(${TELEGRAM_API}/sendMessage, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      chat_id: chatId,
+      text: text,
+      parse_mode: "Markdown",
+    }),
+  });
+}
