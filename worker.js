@@ -1,7 +1,5 @@
-const BOT_TOKEN = "8661021538:AAE1flLAX3xtMYAPo30hUV67z01c_frIiQc";
-const TELEGRAM_API = https://api.telegram.org/bot${BOT_TOKEN};
+const TELEGRAM_API = "https://api.telegram.org/bot8661021538:AAE1flLAX3xtMYAPo30hUV67z01c_frIiQc";
 
-// حافظه موقت در ورکر (برای اینکه نیازی به تنظیم KV و دردسرهای کانفیگ نباشد)
 const userSessions = new Map();
 
 export default {
@@ -22,7 +20,7 @@ export default {
 
           await sendMessage(
             chatId,
-            "سلام! خوش آمدید. 👋\n\nلطفاً نام و نام‌خانوادگی خود را بفرستید:"
+            "سلام! خوش آمدید. 👋\n\nلطفاً نام و نام‌خانوادگی خود را ارسال کنید:"
           );
           return new Response("OK");
         }
@@ -40,7 +38,7 @@ export default {
             session.step = "AWAITING_FIELD";
             userSessions.set(chatId, session);
 
-            await sendMessage(chatId, نام شما ثبت شد ✨\nحالا **رشته یا تخصص** خود را ارسال کنید:);
+            await sendMessage(chatId, "نام شما ثبت شد ✨\nحالا رشته تحصیلی یا تخصص خود را ارسال کنید:");
             break;
 
           case "AWAITING_FIELD":
@@ -50,11 +48,11 @@ export default {
             userSessions.set(chatId, session);
 
             const summary =
-              ✅ **اطلاعات ذخیره شد!**\n\n +
-              👤 نام: ${session.data.name}\n +
-              📚 رشته: ${session.data.field}\n +
-              🆔 شناسه: \${chatId}\\n\n +
-              برای ویرایش مجدد /reset را بزنید.;
+              "✅ اطلاعات ثبت شد!\n\n" +
+              "👤 نام: " + session.data.name + "\n" +
+              "📚 رشته: " + session.data.field + "\n" +
+              "🆔 شناسه: " + chatId + "\n\n" +
+              "برای ثبت مجدد /reset را بزنید.";
 
             await sendMessage(chatId, summary);
             break;
@@ -62,10 +60,10 @@ export default {
           case "COMPLETED":
             await sendMessage(
               chatId,
-              اطلاعات شما از قبل ثبت شده است:\n +
-              👤 نام: ${session.data.name}\n +
-              📚 رشته: ${session.data.field}\n\n +
-              برای تغییر اطلاعات، دستور /reset را ارسال کنید.
+              "اطلاعات شما قبلاً ثبت شده است:\n" +
+              "👤 نام: " + session.data.name + "\n" +
+              "📚 رشته: " + session.data.field + "\n\n" +
+              "برای تغییر اطلاعات دستور /reset را ارسال کنید."
             );
             break;
         }
@@ -79,13 +77,12 @@ export default {
 };
 
 async function sendMessage(chatId, text) {
-  await fetch(${TELEGRAM_API}/sendMessage, {
+  await fetch(TELEGRAM_API + "/sendMessage", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
       chat_id: chatId,
       text: text,
-      parse_mode: "Markdown",
     }),
   });
 }
