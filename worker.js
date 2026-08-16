@@ -1,7 +1,5 @@
 const TELEGRAM_API = "https://api.telegram.org/bot8661021538:AAE1flLAX3xtMYAPo30hUV67z01c_frIiQc";
 
-const userSessions = new Map();
-
 export default {
   async fetch(request, env, ctx) {
     if (request.method !== "POST") {
@@ -14,21 +12,33 @@ export default {
       if (update.message && update.message.text) {
         const chatId = update.message.chat.id;
         const text = update.message.text.trim();
+        const userKey = "user_" + chatId;
+
+        // خواندن وضعیت کاربر از دیتابیس دائمی KV
+        let sessionText = await env.BOT_KV.get(userKey);
+        let session = sessionText ? JSON.parse(sessionText) : null;
 
         if (text === "/start" || text === "/reset") {
-          userSessions.set(chatId, { step: "AWAITING_NAME", data: {} });
+          session = { step: "AWAITING_NAME", data: {} };
+          await env.BOT_KV.put(userKey, JSON.stringify(session));
 
-          await sendMessage(
-            chatId,
-            "سلام! خوش آمدید. 👋\n\nلطفاً نام و نام‌خانوادگی خود را ارسال کنید:"
-          );
+          await fetch(TELEGRAM_API + "/sendMessage", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ 
+              chat_id: chatId, 
+              text: "سلام! 👋\nاطلاعات شما به صورت دائمی ذخیره خواهد شد.\n\nلطفاً نام و نام‌خانوادگی خود را وارد کنید:" 
+            })
+          });
           return new Response("OK");
         }
 
-        const session = userSessions.get(chatId);
-
         if (!session) {
-          await sendMessage(chatId, "لطفاً ابتدا دستور /start را بفرستید.");
+          await fetch(TELEGRAM_API + "/sendMessage", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ chat_id: chatId, text: "برای ثبت مشخصات، لطفاً دستور /start را ارسال کنید." })
+          });
           return new Response("OK");
         }
 
@@ -36,53 +46,50 @@ export default {
           case "AWAITING_NAME":
             session.data.name = text;
             session.step = "AWAITING_FIELD";
-            userSessions.set(chatId, session);
+            await env.BOT_KV.put(userKey, JSON.stringify(session));
 
-            await sendMessage(chatId, "نام شما ثبت شد ✨\nحالا رشته تحصیلی یا تخصص خود را ارسال کنید:");
+            await fetch(TELEGRAM_API + "/sendMessage", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ chat_id: chatId, text: "عالیه! ✨\nحالا لطفاً رشته تحصیلی یا تخصص خود را ارسال کنید:" })
+            });
             break;
 
           case "AWAITING_FIELD":
             session.data.field = text;
-            session.data.savedAt = new Date().toISOString();
+            session.data.registeredAt = new Date().toISOString();
             session.step = "COMPLETED";
-            userSessions.set(chatId, session);
+            await env.BOT_KV.put(userKey, JSON.stringify(session));
 
-            const summary =
-              "✅ اطلاعات ثبت شد!\n\n" +
+            const summary = "✅ اطلاعات برای همیشه ذخیره شد!\n\n" +
               "👤 نام: " + session.data.name + "\n" +
               "📚 رشته: " + session.data.field + "\n" +
-              "🆔 شناسه: " + chatId + "\n\n" +
-              "برای ثبت مجدد /reset را بزنید.";
+              "💾 شناسه کاربری: " + chatId + "\n\n" +
+              "برای ویرایش مجدد، دستور /reset را ارسال کنید.";
 
-            await sendMessage(chatId, summary);
+            await fetch(TELEGRAM_API + "/sendMessage", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ chat_id: chatId, text: summary })
+            });
             break;
-
+            
           case "COMPLETED":
-            await sendMessage(
-              chatId,
-              "اطلاعات شما قبلاً ثبت شده است:\n" +
-              "👤 نام: " + session.data.name + "\n" +
-              "📚 رشته: " + session.data.field + "\n\n" +
-              "برای تغییر اطلاعات دستور /reset را ارسال کنید."
-            );
+            await fetch(TELEGRAM_API + "/sendMessage", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ 
+                chat_id: chatId, 
+                text: "اطلاعات شما قبلاً ذخیره شده است:\n👤 نام: " + session.data.name + "\n📚 رشته: " + session.data.field + "\n\nجهت تغییر اطلاعات، /reset را بزنید." 
+              })
+            });
             break;
         }
       }
     } catch (err) {
-      console.error("Worker Error:", err);
+      console.error("KV Bot Error:", err);
     }
 
     return new Response("OK");
-  },
+  }
 };
-
-async function sendMessage(chatId, text) {
-  await fetch(TELEGRAM_API + "/sendMessage", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      chat_id: chatId,
-      text: text,
-    }),
-  });
-}
