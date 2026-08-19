@@ -1,4 +1,4 @@
-const TELEGRAM_API = "https://api.telegram.org/bot8661021538:AAE1flLAX3xtMYAPo30hUV67z01c_frIiQc";
+const TELEGRAM_API = "https://api.telegram.org/bot";
 
 export default {
   async fetch(request, env, ctx) {
@@ -9,88 +9,84 @@ export default {
     try {
       const update = await request.json();
 
-      if (update.message && update.message.text) {
-        const chatId = update.message.chat.id;
-        const text = update.message.text.trim();
-        const userKey = "user_" + chatId;
-
-        // خواندن وضعیت کاربر از دیتابیس دائمی KV
-        let sessionText = await env.BOT_KV.get(userKey);
-        let session = sessionText ? JSON.parse(sessionText) : null;
-
-        if (text === "/start" || text === "/reset") {
-          session = { step: "AWAITING_NAME", data: {} };
-          await env.BOT_KV.put(userKey, JSON.stringify(session));
-
-          await fetch(TELEGRAM_API + "/sendMessage", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ 
-              chat_id: chatId, 
-              text: "سلام! 👋\nاطلاعات شما به صورت دائمی ذخیره خواهد شد.\n\nلطفاً نام و نام‌خانوادگی خود را وارد کنید:" 
-            })
-          });
-          return new Response("OK");
-        }
-
-        if (!session) {
-          await fetch(TELEGRAM_API + "/sendMessage", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ chat_id: chatId, text: "برای ثبت مشخصات، لطفاً دستور /start را ارسال کنید." })
-          });
-          return new Response("OK");
-        }
-
-        switch (session.step) {
-          case "AWAITING_NAME":
-            session.data.name = text;
-            session.step = "AWAITING_FIELD";
-            await env.BOT_KV.put(userKey, JSON.stringify(session));
-
-            await fetch(TELEGRAM_API + "/sendMessage", {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({ chat_id: chatId, text: "عالیه! ✨\nحالا لطفاً رشته تحصیلی یا تخصص خود را ارسال کنید:" })
-            });
-            break;
-
-          case "AWAITING_FIELD":
-            session.data.field = text;
-            session.data.registeredAt = new Date().toISOString();
-            session.step = "COMPLETED";
-            await env.BOT_KV.put(userKey, JSON.stringify(session));
-
-            const summary = "✅ اطلاعات برای همیشه ذخیره شد!\n\n" +
-              "👤 نام: " + session.data.name + "\n" +
-              "📚 رشته: " + session.data.field + "\n" +
-              "💾 شناسه کاربری: " + chatId + "\n\n" +
-              "برای ویرایش مجدد، دستور /reset را ارسال کنید.";
-
-            await fetch(TELEGRAM_API + "/sendMessage", {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({ chat_id: chatId, text: summary })
-            });
-            break;
-            
-          case "COMPLETED":
-            await fetch(TELEGRAM_API + "/sendMessage", {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({ 
-                chat_id: chatId, 
-                text: "اطلاعات شما قبلاً ذخیره شده است:\n👤 نام: " + session.data.name + "\n📚 رشته: " + session.data.field + "\n\nجهت تغییر اطلاعات، /reset را بزنید." 
-              })
-            });
-            break;
-        }
+      if (!update.message || !update.message.text) {
+        return new Response("OK");
       }
-    } catch (err) {
-      console.error("KV Bot Error:", err);
-    }
 
-    return new Response("OK");
+      const chatId = update.message.chat.id;
+      const text = update.message.text.trim();
+
+      // پیام /start
+      if (text === "/start") {
+        const message =
+          "سلام و خوش اومدی به <b>ربات فارنهایت کنکور</b> 🌡️\n\n" +
+          "به‌زودی ربات فارنهایت کنکور با امکانات زیر فعال می‌شود:\n\n" +
+          "📊 تخمین تراز و رتبه\n" +
+          "📚 معرفی رشته‌ها\n" +
+          "🎯 انتخاب رشته کاملاً اتوماتیک\n\n" +
+          "<b>برای اولین بار در ایران</b> 🚀\n\n" +
+          "تا زمان فعال شدن ربات، ما را در کانال <b>@Fahrenheit_Konkur</b> دنبال کنید.";
+
+        await sendMessage(env.BOT_TOKEN, chatId, message, {
+          inline_keyboard: [
+            [
+              {
+                text: "فارنهایت کنکور",
+                url: "https://t.me/Fahrenheit_Konkur"
+              }
+            ]
+          ]
+        });
+
+        return new Response("OK");
+      }
+
+      // اگر کاربر قبلاً /start زده ولی پیام دیگری فرستاد
+      await sendMessage(
+        env.BOT_TOKEN,
+        chatId,
+        "ربات فارنهایت کنکور به‌زودی فعال می‌شود 🚀\n\nبرای اطلاع از آخرین اخبار، کانال ما را دنبال کنید.",
+        {
+          inline_keyboard: [
+            [
+              {
+                text: "فارنهایت کنکور",
+                url: "https://t.me/Fahrenheit_Konkur"
+              }
+            ]
+          ]
+        }
+      );
+
+      return new Response("OK");
+
+    } catch (err) {
+      console.error("Bot Error:", err);
+      return new Response("OK");
+    }
   }
 };
-//force new build
+
+
+async function sendMessage(token, chatId, text, replyMarkup = null) {
+  const body = {
+    chat_id: chatId,
+    text: text,
+    parse_mode: "HTML"
+  };
+
+  if (replyMarkup) {
+    body.reply_markup = replyMarkup;
+  }
+
+  await fetch(
+    `${TELEGRAM_API}${token}/sendMessage`,
+    {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify(body)
+    }
+  );
+}
